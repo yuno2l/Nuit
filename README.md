@@ -1,7 +1,5 @@
 # 🛡️ Nuit - CVE Explorer & Digital Sovereignty Platform
 
-# 🛡️ Nuit - CVE Explorer & Digital Sovereignty Platform
-
 [![AGPL License](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/yuno2l/Nuit)
 
