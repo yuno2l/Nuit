@@ -70,6 +70,31 @@ export async function searchCVEsFromNVD(keyword: string, resultsPerPage = 20): P
   }
 }
 
+// Helper function to split date ranges into 120-day chunks (NVD API limit)
+function splitDateRange(startDate: Date, endDate: Date): Array<{ start: Date; end: Date }> {
+  const chunks: Array<{ start: Date; end: Date }> = [];
+  const MAX_DAYS = 119; // Use 119 to be safe with the 120-day limit
+  
+  let currentStart = new Date(startDate);
+  
+  while (currentStart < endDate) {
+    const currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentEnd.getDate() + MAX_DAYS);
+    
+    // Don't exceed the end date
+    if (currentEnd > endDate) {
+      chunks.push({ start: new Date(currentStart), end: new Date(endDate) });
+      break;
+    }
+    
+    chunks.push({ start: new Date(currentStart), end: new Date(currentEnd) });
+    currentStart = new Date(currentEnd);
+    currentStart.setDate(currentStart.getDate() + 1); // Move to next day
+  }
+  
+  return chunks;
+}
+
 export async function searchCVEsByDateRange(
   keyword: string,
   pubStartDate: string,
@@ -81,25 +106,85 @@ export async function searchCVEsByDateRange(
   if (cached) return cached;
 
   try {
-    await rateLimitNVD();
-    const response = await axios.get(NVD_BASE_URL, {
-      params: {
-        keywordSearch: keyword,
-        pubStartDate,
-        pubEndDate,
-        resultsPerPage,
-      },
-      headers: process.env.NVD_API_KEY ? { "apiKey": process.env.NVD_API_KEY } : {},
-      timeout: 20000,
-    });
+    const startDate = new Date(pubStartDate);
+    const endDate = new Date(pubEndDate);
+    
+    // Calculate the difference in days
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // If the range is within 120 days, make a single request
+    if (daysDiff <= 120) {
+      await rateLimitNVD();
+      const response = await axios.get(NVD_BASE_URL, {
+        params: {
+          keywordSearch: keyword,
+          pubStartDate,
+          pubEndDate,
+          resultsPerPage,
+        },
+        headers: process.env.NVD_API_KEY ? { "apiKey": process.env.NVD_API_KEY } : {},
+        timeout: 20000,
+      });
 
-    if (response.data) {
-      setInCache(cacheKey, response.data);
-      return response.data;
+      if (response.data) {
+        setInCache(cacheKey, response.data);
+        return response.data;
+      }
+      return null;
     }
-    return null;
+    
+    // Split into multiple requests for date ranges exceeding 120 days
+    console.log(`Date range exceeds 120 days (${daysDiff} days). Splitting into chunks...`);
+    const chunks = splitDateRange(startDate, endDate);
+    console.log(`Split into ${chunks.length} chunks`);
+    
+    const allVulnerabilities: any[] = [];
+    let totalResults = 0;
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const chunkStart = chunk.start.toISOString().split('T')[0] + 'T00:00:00.000';
+      const chunkEnd = chunk.end.toISOString().split('T')[0] + 'T23:59:59.999';
+      
+      console.log(`Fetching chunk ${i + 1}/${chunks.length}: ${chunkStart} to ${chunkEnd}`);
+      
+      await rateLimitNVD();
+      const response = await axios.get(NVD_BASE_URL, {
+        params: {
+          keywordSearch: keyword,
+          pubStartDate: chunkStart,
+          pubEndDate: chunkEnd,
+          resultsPerPage,
+        },
+        headers: process.env.NVD_API_KEY ? { "apiKey": process.env.NVD_API_KEY } : {},
+        timeout: 20000,
+      });
+      
+      if (response.data?.vulnerabilities) {
+        allVulnerabilities.push(...response.data.vulnerabilities);
+        totalResults = response.data.totalResults || allVulnerabilities.length;
+      }
+    }
+    
+    // Combine all results into a single response
+    const combinedResponse: NVDResponse = {
+      resultsPerPage,
+      startIndex: 0,
+      totalResults: allVulnerabilities.length,
+      format: 'NVD_CVE',
+      version: '2.0',
+      timestamp: new Date().toISOString(),
+      vulnerabilities: allVulnerabilities,
+    };
+    
+    setInCache(cacheKey, combinedResponse);
+    return combinedResponse;
   } catch (error) {
-    console.error(`Error searching CVEs by date range:`, error);
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      console.error("Error searching CVEs by date range:", error.response.headers.message || error.message);
+    } else {
+      console.error("Error searching CVEs by date range:", error);
+    }
     return null;
   }
 }
@@ -181,11 +266,17 @@ export async function getCVEDetails(cveId: string): Promise<CVEDetails | null> {
   // Extract description
   const description = cve.descriptions.find((d) => d.lang === "en")?.value || "";
 
-  // Extract affected products (simplified)
+  // Extract affected products from description and references
   const affectedProducts: string[] = [];
-  if (cve.configurations) {
-    // This is simplified - real implementation would parse configuration data
-    affectedProducts.push("See NVD for full details");
+  const productMatches = description.match(/(?:Microsoft|Windows|Oracle|Linux|Apache|Cisco|VMware|Adobe|Google|Apple|IBM|SAP|Dell|HP|Nvidia|Intel|AMD)[\w\s\-\.]+/gi);
+  if (productMatches) {
+    const uniqueProducts = [...new Set(productMatches.slice(0, 5))]; // Limit to 5 unique matches
+    affectedProducts.push(...uniqueProducts);
+  }
+  
+  // Add vendor info from KEV if available
+  if (kevEntry) {
+    affectedProducts.push(`${kevEntry.vendorProject} ${kevEntry.product}`);
   }
 
   return {

@@ -8,7 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { CVSSGauge } from "@/components/CVSSGauge";
 import { EPSSMeter } from "@/components/EPSSMeter";
+import NIRDRecommendations from "@/components/NIRDRecommendations";
 import { formatDate } from "@/lib/utils";
+import { detectProprietarySoftware } from "@/lib/gemini";
 import type { CVEDetails } from "@/lib/types";
 
 export default function Home() {
@@ -229,6 +231,24 @@ export default function Home() {
               </CardContent>
             </Card>
           )}
+
+          {/* NIRD Recommendations */}
+          {(() => {
+            const detection = detectProprietarySoftware(
+              cveData.description,
+              cveData.references,
+              cveData.affectedProducts
+            );
+            return detection.isProprietary ? (
+              <NIRDRecommendations
+                cveId={cveData.id}
+                description={cveData.description}
+                affectedProducts={cveData.affectedProducts || []}
+                isWindows={detection.isWindows}
+                isOracle={detection.isOracle}
+              />
+            ) : null;
+          })()}
         </div>
       )}
 
