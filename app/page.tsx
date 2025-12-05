@@ -2,47 +2,53 @@
 
 import React, { useState } from "react";
 import { Search, Shield } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { CVSSGauge } from "@/components/CVSSGauge";
-import { EPSSMeter } from "@/components/EPSSMeter";
-import NIRDRecommendations from "@/components/NIRDRecommendations";
-import { formatDate } from "@/lib/utils";
-import { detectProprietarySoftware } from "@/lib/gemini";
+import CVEInput from "@/components/CVEInput";
+import CVECard from "@/components/CVECard";
 import type { CVEDetails } from "@/lib/types";
 
 export default function Home() {
-  const [cveId, setCveId] = useState("");
+  const [cveIds, setCveIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [cveData, setCveData] = useState<CVEDetails | null>(null);
+  const [cveDataList, setCveDataList] = useState<CVEDetails[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<{ total: number; successful: number; failed: number } | null>(null);
 
-  const searchCVE = async () => {
-    if (!cveId.trim()) return;
+  const searchCVEs = async () => {
+    if (cveIds.length === 0) return;
 
     setLoading(true);
     setError(null);
-    setCveData(null);
+    setCveDataList([]);
+    setStats(null);
 
     try {
-      const response = await fetch(`/api/cve?id=${encodeURIComponent(cveId.trim())}`);
+      const response = await fetch('/api/cve/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cveIds }),
+      });
+
       if (!response.ok) {
-        throw new Error("CVE not found");
+        throw new Error("Failed to fetch CVEs");
       }
+
       const data = await response.json();
-      setCveData(data);
+      setCveDataList(data.results || []);
+      setStats({
+        total: data.total,
+        successful: data.successful,
+        failed: data.failed,
+      });
+
+      if (data.failed > 0) {
+        console.warn("Some CVEs failed to load:", data.errors);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch CVE data");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      searchCVE();
     }
   };
 
@@ -62,27 +68,24 @@ export default function Home() {
       </div>
 
       {/* Search Section */}
-      <Card className="max-w-3xl mx-auto">
+      <Card className="max-w-4xl mx-auto">
         <CardHeader>
-          <CardTitle>Search CVE</CardTitle>
+          <CardTitle>Search CVEs</CardTitle>
           <CardDescription>
-            Enter a CVE ID (e.g., CVE-2024-1234) to analyze vulnerabilities
+            Enter CVE IDs, use autocomplete, or upload a file (TXT, CSV, XLSX)
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex space-x-2">
-            <Input
-              placeholder="CVE-2024-1234"
-              value={cveId}
-              onChange={(e) => setCveId(e.target.value)}
-              onKeyPress={handleKeyPress}
-              className="flex-1"
-            />
-            <Button onClick={searchCVE} disabled={loading}>
-              <Search className="h-4 w-4 mr-2" />
-              {loading ? "Searching..." : "Search"}
-            </Button>
-          </div>
+        <CardContent className="space-y-4">
+          <CVEInput onCVEsChange={setCveIds} />
+          <Button 
+            onClick={searchCVEs} 
+            disabled={loading || cveIds.length === 0}
+            className="w-full"
+            size="lg"
+          >
+            <Search className="h-4 w-4 mr-2" />
+            {loading ? "Analyzing..." : `Analyze ${cveIds.length} CVE${cveIds.length !== 1 ? 's' : ''}`}
+          </Button>
         </CardContent>
       </Card>
 
@@ -95,220 +98,76 @@ export default function Home() {
         </Card>
       )}
 
-      {/* CVE Details */}
-      {cveData && (
-        <div className="space-y-6">
-          {/* Header */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="space-y-2">
-                  <CardTitle className="text-3xl">{cveData.id}</CardTitle>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant={cveData.isKEV ? "destructive" : "secondary"}>
-                      {cveData.isKEV ? "🚨 Known Exploited" : "Not in KEV"}
-                    </Badge>
-                    {cveData.cwe && (
-                      <Badge variant="outline">{cveData.cwe}</Badge>
-                    )}
-                  </div>
-                </div>
+      {/* Stats Summary */}
+      {stats && cveDataList.length > 0 && (
+        <Card className="max-w-4xl mx-auto">
+          <CardContent className="pt-6">
+            <div className="flex justify-around text-center">
+              <div>
+                <div className="text-3xl font-bold text-primary">{stats.total}</div>
+                <div className="text-sm text-muted-foreground">Total Requested</div>
               </div>
-              <CardDescription className="text-base mt-4">
-                {cveData.description}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Published:</span>
-                  <p className="font-medium">{formatDate(cveData.published)}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Last Modified:</span>
-                  <p className="font-medium">{formatDate(cveData.lastModified)}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Vector String:</span>
-                  <p className="font-mono text-xs">{cveData.vectorString || "N/A"}</p>
-                </div>
+              <div>
+                <div className="text-3xl font-bold text-green-600">{stats.successful}</div>
+                <div className="text-sm text-muted-foreground">Successfully Loaded</div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <CVSSGauge score={cveData.cvssScore} />
-            {cveData.epss !== undefined && (
-              <EPSSMeter epss={cveData.epss} percentile={cveData.epssPercentile || 0} />
-            )}
-          </div>
-
-          {/* KEV Details */}
-          {cveData.isKEV && cveData.kevDetails && (
-            <Card className="border-destructive">
-              <CardHeader>
-                <CardTitle className="text-destructive">
-                  ⚠️ Known Exploited Vulnerability
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold mb-1">Vulnerability Name</h4>
-                    <p>{cveData.kevDetails.vulnerabilityName}</p>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-1">Description</h4>
-                    <p>{cveData.kevDetails.shortDescription}</p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="font-semibold mb-1">Vendor/Project</h4>
-                      <p>{cveData.kevDetails.vendorProject}</p>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold mb-1">Product</h4>
-                      <p>{cveData.kevDetails.product}</p>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold mb-1">Date Added to KEV</h4>
-                      <p>{formatDate(cveData.kevDetails.dateAdded)}</p>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold mb-1">Due Date</h4>
-                      <p>{formatDate(cveData.kevDetails.dueDate)}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-1">Required Action</h4>
-                    <p>{cveData.kevDetails.requiredAction}</p>
-                  </div>
+              {stats.failed > 0 && (
+                <div>
+                  <div className="text-3xl font-bold text-destructive">{stats.failed}</div>
+                  <div className="text-sm text-muted-foreground">Failed</div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-          {/* CWE Details */}
-          {cveData.cwe && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Weakness Type (CWE)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <p className="font-mono text-sm">{cveData.cwe}</p>
-                  <p className="text-muted-foreground">{cveData.cweDescription}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* References */}
-          {cveData.references.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>References</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {cveData.references.map((ref, index) => (
-                    <div key={index} className="flex items-start space-x-2 text-sm">
-                      <span className="text-muted-foreground min-w-[100px]">
-                        {ref.source}
-                      </span>
-                      <a
-                        href={ref.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-rimini-blue hover:underline break-all"
-                      >
-                        {ref.url}
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* NIRD Recommendations */}
-          {(() => {
-            const detection = detectProprietarySoftware(
-              cveData.description,
-              cveData.references,
-              cveData.affectedProducts
-            );
-            return detection.isProprietary ? (
-              <NIRDRecommendations
-                cveId={cveData.id}
-                description={cveData.description}
-                affectedProducts={cveData.affectedProducts || []}
-                isWindows={detection.isWindows}
-                isOracle={detection.isOracle}
-              />
-            ) : null;
-          })()}
+      {/* CVE Results */}
+      {cveDataList.length > 0 && (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold">Analysis Results</h2>
+          {cveDataList.map((cveData, index) => (
+            <CVECard key={cveData.id} cveData={cveData} defaultExpanded={cveDataList.length === 1} />
+          ))}
         </div>
       )}
 
       {/* Getting Started */}
-      {!cveData && !loading && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mt-12">
+      {cveDataList.length === 0 && !loading && !error && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mt-12">
           <Card className="text-center">
             <CardHeader>
-              <CardTitle className="text-lg">Try Popular CVEs</CardTitle>
+              <CardTitle className="text-lg">Critical Vulnerabilities</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Button
                 variant="outline"
                 className="w-full"
                 onClick={() => {
-                  setCveId("CVE-2021-44228");
-                  setTimeout(() => searchCVE(), 100);
+                  setCveIds(["CVE-2021-44228", "CVE-2023-21839", "CVE-2023-34048"]);
                 }}
               >
-                CVE-2021-44228
+                Load 3 Critical CVEs
               </Button>
-              <p className="text-xs text-muted-foreground">Log4Shell</p>
+              <p className="text-xs text-muted-foreground">Log4Shell, Oracle WebLogic, VMware vCenter</p>
             </CardContent>
           </Card>
 
           <Card className="text-center">
             <CardHeader>
-              <CardTitle className="text-lg">Oracle</CardTitle>
+              <CardTitle className="text-lg">Windows Vulnerabilities</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Button
                 variant="outline"
                 className="w-full"
                 onClick={() => {
-                  setCveId("CVE-2023-21839");
-                  setTimeout(() => searchCVE(), 100);
+                  setCveIds(["CVE-2023-21839"]);
                 }}
               >
-                CVE-2023-21839
+                Try Oracle Example
               </Button>
-              <p className="text-xs text-muted-foreground">Oracle WebLogic</p>
-            </CardContent>
-          </Card>
-
-          <Card className="text-center">
-            <CardHeader>
-              <CardTitle className="text-lg">VMware</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setCveId("CVE-2023-34048");
-                  setTimeout(() => searchCVE(), 100);
-                }}
-              >
-                CVE-2023-34048
-              </Button>
-              <p className="text-xs text-muted-foreground">vCenter Server</p>
+              <p className="text-xs text-muted-foreground">See NIRD migration recommendations</p>
             </CardContent>
           </Card>
         </div>
