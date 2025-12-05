@@ -1,5 +1,12 @@
 # 🛡️ Nuit - CVE Explorer & Digital Sovereignty Platform
 
+# 🛡️ Nuit - CVE Explorer & Digital Sovereignty Platform
+
+[![AGPL License](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/yuno2l/Nuit)
+
+... 
+
 **Live Demo**: [https://nuit-nu.vercel.app](https://nuit-nu.vercel.app)  
 
 A modern, AI-powered vulnerability analysis platform with digital sovereignty recommendations and multi-CVE processing capabilities.
@@ -567,7 +574,32 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-MIT License - Built for the Rimini Street Hackathon
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+See the [LICENSE](LICENSE) file for the full license text.
+
+### Why AGPL v3.0?
+- Ensures software freedom remains for web applications
+- Requires source code sharing when modified versions are run on a server
+- Aligns with hackathon requirements for open source contributions
+- Protects the community while allowing commercial use
+
+### Quick Summary
+✅ **You can:**
+- Use, study, and modify the code
+- Distribute original or modified versions
+- Use commercially (with AGPL requirements)
+
+✅ **You must:**
+- Disclose source code when running modified versions on a server
+- Include copyright and license notices
+- State changes made to the code
+
+✅ **You cannot:**
+- Relicense or remove the AGPL requirements
+- Hold authors liable for damages (within limits)
+
+For more information, visit: https://choosealicense.com/licenses/agpl-3.0/
 
 ## 🙏 Credits & Acknowledgments
 
