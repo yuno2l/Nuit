@@ -1,5 +1,7 @@
 # 🛡️ Nuit - CVE Explorer & Digital Sovereignty Platform
 
+**Live Demo**: [https://nuit-nu.vercel.app](https://nuit-nu.vercel.app)  
+
 A modern, AI-powered vulnerability analysis platform with digital sovereignty recommendations and multi-CVE processing capabilities.
 
 ## ✨ Key Features
