@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -35,11 +35,8 @@ export default function DashboardPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [keyword, months]);
-
-  const fetchAnalytics = async () => {
+  // Wrap fetchAnalytics with useCallback to prevent infinite re-renders
+  const fetchAnalytics = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -57,7 +54,12 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [keyword, months]); // ✅ Add dependencies here
+
+  // useEffect now only depends on fetchAnalytics
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]); // ✅ Now only depends on fetchAnalytics
 
   return (
     <div className="space-y-8">
