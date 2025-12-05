@@ -166,16 +166,6 @@ npm start
 
 This creates an optimized production build and starts the server on port 3000.
 
-## Deployment
-
-### Vercel (Recommended)
-1. Push your code to GitHub
-2. Import project in Vercel
-3. Add environment variables (NVD_API_KEY)
-4. Deploy!
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
-
 ## 📁 Project Structure
 
 ```
