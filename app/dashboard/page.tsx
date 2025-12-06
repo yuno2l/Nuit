@@ -54,12 +54,12 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [keyword, months]); // ✅ Add dependencies here
+  }, [keyword, months]);
 
-  // useEffect now only depends on fetchAnalytics
+  
   useEffect(() => {
     fetchAnalytics();
-  }, [fetchAnalytics]); // ✅ Now only depends on fetchAnalytics
+  }, [fetchAnalytics]);
 
   return (
     <div className="space-y-8">
