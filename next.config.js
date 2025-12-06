@@ -2,7 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['nvd.nist.gov'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'nvd.nist.gov',
+      },
+    ],
   },
   async headers() {
     return [
